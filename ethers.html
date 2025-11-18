@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Document</title>
+		<style>
+			body {
+				font-family: Arial, sans-serif;
+				max-width: 900px;
+				margin: 24px auto;
+				padding: 12px;
+			}
+			input,
+			button,
+			textarea {
+				font-size: 14px;
+				padding: 8px;
+				margin: 6px 0;
+				width: 100%;
+				box-sizing: border-box;
+			}
+			.row {
+				display: flex;
+				gap: 8px;
+			}
+			.col {
+				flex: 1;
+			}
+			pre {
+				background: #f6f8fa;
+				padding: 12px;
+				overflow: auto;
+				max-height: 300px;
+			}
+			.small {
+				font-size: 12px;
+				color: #666;
+			}
+			.ok {
+				color: green;
+			}
+			.err {
+				color: red;
+			}
+			.hide {
+				display: none;
+			}
+			.show {
+				display: block;
+			}
+		</style>
+	</head>
+	<body>
+		<h1>根据 tx 读取 Sepolia 转账</h1>
+		<section>
+			<label>交易哈希（tx hash）：</label>
+			<input id="txHash" placeholder="例如：0x...." />
+
+			<div class="row">
+				<div class="col">
+					<button id="readWithWallet">读取信息</button>
+				</div>
+			</div>
+
+			<h3>结果</h3>
+			<pre id="txResult">尚未查询</pre>
+		</section>
+
+		<hr />
+
+		<section>
+			<h2>在 Sepolia 测试网进行转账（MetaMask）</h2>
+			<p class="small">
+				转账使用 MetaMask 的签名器。确保你已经在 MetaMask 添加并切换到
+				<strong>Sepolia</strong>（chainId 11155111）。页面会尝试请求切换网络。
+			</p>
+
+			<div>
+				<button id="connectBtn">连接钱包 / 检查网络</button>
+				<div id="walletInfo" class="small">钱包未连接</div>
+				<div id="balance"></div>
+			</div>
+
+			<div id="transaction-area" class="hide">
+				<hr />
+				<label>收款地址：</label>
+				<input id="toAddress" placeholder="0x..." />
+
+				<label>数量（ETH）：</label>
+				<input id="amount" placeholder="0.01" />
+
+				<button id="sendBtn">发送交易（签名并广播）</button>
+
+				<h3>转账状态</h3>
+				<pre id="sendStatus">尚未发送</pre>
+			</div>
+		</section>
+		<script
+			type="text/javascript"
+			src="./node_modules/ethers/dist/ethers.umd.js"
+		></script>
+		<script type="text/javascript">
+			// --------------- 读取链上数据 ---------------
+			const txHashInput = document.getElementById('txHash');
+			const txResult = document.getElementById('txResult');
+			const readWithWalletBtn = document.getElementById('readWithWallet');
+
+			function showJSON(obj) {
+				txResult.textContent = JSON.stringify(
+					obj,
+					(k, v) => {
+						// 格式化 BigInt/BigNumber
+						if (
+							ethers &&
+							typeof v === 'object' &&
+							v !== null &&
+							v._isBigNumber
+						) {
+							return v.toString();
+						}
+						return v;
+					},
+					2
+				);
+			}
+
+			readWithWalletBtn.addEventListener('click', async () => {
+				// 0xa67f19d1dfeec17151eaf6301920dc30766d02cb46378374185559cae5a51fc8
+				const txHash = txHashInput.value.trim();
+				if (!txHash) return alert('请输入交易哈希');
+
+				try {
+					txResult.textContent = '查询中 ...';
+					// const provider = new ethers.BrowserProvider(window.ethereum);
+					const provider = new ethers.JsonRpcProvider(
+						'https://1rpc.io/sepolia'
+					);
+					const network = await provider.getNetwork();
+					const tx = await provider.getTransaction(txHash);
+					const receipt = await provider.getTransactionReceipt(txHash);
+					showJSON({ network, tx, receipt });
+				} catch (e) {
+					txResult.textContent = '错误：' + (e.message || e);
+				}
+			});
+
+			// ----------------- 连接钱包转账 ----------------
+			const connectBtn = document.getElementById('connectBtn');
+			const walletInfo = document.getElementById('walletInfo');
+			const balanceInfo = document.getElementById('balance');
+			const txArea = document.getElementById('transaction-area');
+			const toAddressInput = document.getElementById('toAddress');
+			const amountInput = document.getElementById('amount');
+			const sendBtn = document.getElementById('sendBtn');
+			const sendStatus = document.getElementById('sendStatus');
+
+			const networkCfg = {
+				chainId: '0xaa36a7',
+				chainName: 'Sepolia Testnet',
+				nativeCurrency: {
+					name: 'Sepolia Ether',
+					symbol: 'ETH',
+					decimals: 18,
+				},
+				rpcUrls: ['https://sepolia.infura.io/v3/'],
+				blockExplorerUrls: ['https://sepolia.etherscan.io'],
+			};
+
+			let provider, signer, userAddress, balance;
+
+			// 连接钱包
+			async function ensureMetaMaskAndSepolia() {
+				if (!window.ethereum || typeof window.ethereum === 'undefined')
+					return alert('未检测到 window.ethereum（请安装 MetaMask）');
+
+				// 或取 provider
+				provider = new ethers.BrowserProvider(window.ethereum);
+				// 通过 provider 弹出 MetaMask 授权窗口
+				// const accounts = await window.ethereum.request({
+				// 	method: 'eth_requestAccounts',
+				// });
+				await provider.send('eth_requestAccounts', []);
+
+				// 获取网络信息
+				let network = await provider.getNetwork();
+				const targetChainId = '0xaa36a7';
+
+				if (network.chainId.toString(16) !== targetChainId.substring(2)) {
+					try {
+						// 尝试切换到本地测试网
+						await window.ethereum.request({
+							method: 'wallet_switchEthereumChain',
+							params: [{ chainId: targetChainId }],
+						});
+					} catch (switchError) {
+						// 如果网络不存在，尝试添加网络
+						if (switchError.code === 4902) {
+							const networkConfig = networkConfig;
+							await window.ethereum.request({
+								method: 'wallet_addEthereumChain',
+								params: [networkCfg],
+							});
+						} else {
+							throw switchError;
+						}
+					}
+				}
+
+				// 重新获取网络信息
+				provider = new ethers.BrowserProvider(window.ethereum);
+				signer = await provider.getSigner();
+
+				// 获取钱包地址
+				userAddress = await signer.getAddress();
+				balance = await provider.getBalance(userAddress);
+				// 将 Wei 转换为 ETH（ethers 提供了 formatEther 方法）
+				balance = ethers.formatEther(balance);
+			}
+
+			connectBtn.addEventListener('click', async () => {
+				try {
+					await ensureMetaMaskAndSepolia();
+					console.log(userAddress);
+					walletInfo.innerHTML = `已连接：${userAddress}`;
+					balanceInfo.innerHTML = `余额：${balance} ETH`;
+					txArea.className = 'show';
+				} catch (e) {
+					walletInfo.innerHTML = `<span class="err">错误：${
+						e.message || e
+					}</span>`;
+				}
+			});
+
+			sendBtn.addEventListener('click', async () => {
+				sendStatus.textContent = '准备发送...';
+
+				try {
+					const to = toAddressInput.value.trim();
+					const amount = amountInput.value.trim();
+					if (!to) throw new Error('请输入收款地址');
+					if (!amount || isNaN(Number(amount)))
+						throw new Error('请输入有效数值的 ETH 数量');
+
+					// 创建交易
+					const txResponse = await signer.sendTransaction({
+						to,
+						value: ethers.parseEther(amount),
+						// gasLimit 可选：大多数钱包会估算并提示用户
+					});
+					sendStatus.textContent =
+						'已广播交易，等待上链... txHash: ' + txResponse.hash;
+
+					// 等待确认（4 个区块）
+					const receipt = await txResponse.wait(4);
+					sendStatus.textContent =
+						'交易确认！区块号：' +
+						receipt.blockNumber +
+						'\n\n' +
+						JSON.stringify(
+							receipt,
+							(k, v) => {
+								if (v && v._isBigNumber) return v.toString();
+								return v;
+							},
+							2
+						);
+				} catch (e) {
+					sendStatus.textContent = '错误：' + (e.message || e);
+				}
+			});
+
+			// 监听账户余额发生变
+			provider.on('block', async (blockNumber) => {
+				console.log('新区块:', blockNumber);
+
+				// 查询余额
+				const newBalance = await provider.getBalance(userAddress);
+
+				balanceInfo.innerHTML = `余额：${ethers.formatEther(newBalance)} ETH`;
+			});
+		</script>
+	</body>
+</html>

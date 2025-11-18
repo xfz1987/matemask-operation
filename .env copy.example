@@ -1,0 +1,9 @@
+# Infura 配置
+# 获取免费的 Infura Project ID: https://infura.io/register
+INFURA_PROJECT_ID=your_infura_project_id_here
+
+# 服务器端口
+PORT=3000
+
+# 网络选择 (mainnet, sepolia, goerli 等)
+NETWORK=sepolia

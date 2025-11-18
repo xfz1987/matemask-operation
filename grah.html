@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>The Graph ERC20 Transfer 查询</title>
+		<style>
+			body {
+				font-family: Arial, sans-serif;
+				max-width: 900px;
+				margin: 24px auto;
+				padding: 12px;
+			}
+			input,
+			button {
+				font-size: 14px;
+				padding: 8px;
+				margin: 6px 0;
+				width: 100%;
+				box-sizing: border-box;
+			}
+			pre {
+				background: #f6f8fa;
+				padding: 12px;
+				overflow: auto;
+				max-height: 300px;
+			}
+			.small {
+				font-size: 12px;
+				color: #666;
+			}
+		</style>
+	</head>
+	<body>
+		<h1>使用 The Graph 查询 ERC20 转账记录</h1>
+
+		<section>
+			<label>ERC20 Token Subgraph URL：</label>
+			<input
+				id="subgraphUrl"
+				placeholder="例如： https://api.studio.thegraph.com/query/..."
+				value="https://api.studio.thegraph.com/query/74260/erc20-sepolia/version/latest/graphql"
+			/>
+
+			<label>查询的用户地址（address）：</label>
+			<input
+				id="userAddress"
+				placeholder="0x..."
+				value="0x9C192B5BDA3e72C0b43a8768fAcDCAa00d5bd7b9"
+			/>
+
+			<button id="queryBtn">查询 Transfer 事件</button>
+
+			<h3>查询结果</h3>
+			<pre id="result">尚未查询</pre>
+		</section>
+
+		<script>
+			const queryBtn = document.getElementById('queryBtn');
+			const resultBox = document.getElementById('result');
+
+			const TRANSFER_QUERY = `
+      query Transfers($addr: String!) {
+        transfers(where: { from: $addr }) {
+          id
+          from
+          to
+          value
+          blockNumber
+          transactionHash,
+          token
+        }
+      }
+    `;
+
+			const TRANSFER_QUERY2 = `
+      {
+        transfers(first: 5, orderBy: timestamp, orderDirection: desc) {
+          id
+          from
+          to
+          value
+          timestamp
+        }
+      }
+    `;
+
+			queryBtn.addEventListener('click', async () => {
+				const url = document.getElementById('subgraphUrl').value.trim();
+				const addr = document
+					.getElementById('userAddress')
+					.value.trim()
+					.toLowerCase();
+
+				if (!url) return alert('请输入 Subgraph URL');
+				// if (!addr) return alert('请输入地址');
+
+				resultBox.textContent = '查询中...';
+
+				try {
+					const res = await fetch(url, {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({
+							query: TRANSFER_QUERY2,
+							// variables: { addr },
+						}),
+					});
+
+					const json = await res.json();
+					resultBox.textContent = JSON.stringify(json, null, 2);
+				} catch (err) {
+					resultBox.textContent = '错误：' + err.message;
+				}
+			});
+		</script>
+	</body>
+</html>

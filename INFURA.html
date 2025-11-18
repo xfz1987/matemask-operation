@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Infura 交易查询</title>
+		<style>
+			body {
+				font-family: Arial, sans-serif;
+				max-width: 900px;
+				margin: 24px auto;
+				padding: 12px;
+			}
+			input,
+			button,
+			textarea {
+				font-size: 14px;
+				padding: 8px;
+				margin: 6px 0;
+				width: 100%;
+				box-sizing: border-box;
+			}
+			.row {
+				display: flex;
+				gap: 8px;
+			}
+			.col {
+				flex: 1;
+			}
+			pre {
+				background: #f6f8fa;
+				padding: 12px;
+				overflow: auto;
+				max-height: 600px;
+			}
+			.small {
+				font-size: 12px;
+				color: #666;
+			}
+			.ok {
+				color: green;
+			}
+			.err {
+				color: red;
+			}
+			.hide {
+				display: none;
+			}
+			.show {
+				display: block;
+			}
+		</style>
+	</head>
+	<body>
+		<h1>根据 tx 读取 Sepolia Infura 信息</h1>
+		<section>
+			<label>交易哈希（tx hash）：</label>
+			<input id="txHash" placeholder="例如：0x...." />
+			<div class="row">
+				<div class="col">
+					<button id="readWithProvider">使用 Infura 读取信息</button>
+				</div>
+			</div>
+			<h3>结果</h3>
+			<pre id="txResult">尚未查询</pre>
+		</section>
+
+		<script
+			type="text/javascript"
+			src="./node_modules/ethers/dist/ethers.umd.js"
+		></script>
+
+		<script type="text/javascript">
+			const txHashInput = document.getElementById('txHash');
+			const txResult = document.getElementById('txResult');
+			const readWithProviderBtn = document.getElementById('readWithProvider');
+
+			function showJSON(obj) {
+				txResult.textContent = JSON.stringify(
+					obj,
+					(k, v) => {
+						if (ethers && v && typeof v === 'object' && v._isBigNumber)
+							return v.toString();
+						return v;
+					},
+					2
+				);
+			}
+
+			readWithProviderBtn.addEventListener('click', async () => {
+				const txHash = txHashInput.value.trim();
+				if (!txHash) return alert('请输入交易哈希');
+
+				try {
+					txResult.textContent = '查询中...';
+					fetch(`http://localhost:3000/tx/${txHash}`, {
+						method: 'GET',
+						headers: {
+							'Content-Type': 'application/json',
+						},
+					})
+						.then((response) => response.json())
+						.then((data) => {
+							const { tx, receipt } = data;
+							showJSON({ tx, receipt });
+						})
+						.catch((error) => {
+							console.error(error);
+						});
+				} catch (e) {
+					txResult.textContent = '错误：' + (e.message || e);
+				}
+			});
+		</script>
+	</body>
+</html>
